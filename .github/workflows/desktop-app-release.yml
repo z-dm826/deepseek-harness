@@ -2,8 +2,6 @@ name: Desktop App CI/CD (Release)
 
 on:
   push:
-    branches:
-      - master
     tags:
       - 'v*'
       - 'desktop-v*'
@@ -70,8 +68,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: './apps/desktop-tauri'
-          tagName: ${{ github.ref_type == 'tag' && github.ref_name || 'v0.1.0' }}
-          releaseName: 'DeepSeek Harness Desktop ${{ github.ref_type == 'tag' && github.ref_name || 'v0.1.0' }}'
+          tagName: ${{ github.ref_name }}
+          releaseName: 'DeepSeek Harness Desktop ${{ github.ref_name }}'
           releaseBody: 'DeepSeek Harness Desktop Client with proxy management for macOS (Apple Silicon & Intel), Windows, and Linux.'
           releaseDraft: false
           prerelease: false
