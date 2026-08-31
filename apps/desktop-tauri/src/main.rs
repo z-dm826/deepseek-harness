@@ -1,10 +1,12 @@
 use std::env;
 use std::fs;
+use std::net::TcpStream;
 use std::path::PathBuf;
 use std::process::{Child, Command};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use serde::{Deserialize, Serialize};
-use tauri::State;
+use tauri::{Manager, State, Url};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ProxyConfig {
@@ -93,7 +95,7 @@ fn start_dsh_process(project_dir: &PathBuf, proxy: &ProxyConfig, port: u16) -> O
         println!("[dsh-desktop] Starting backend WITHOUT proxy settings");
     }
 
-match cmd.spawn() {
+    match cmd.spawn() {
         Ok(child) => {
             println!("[dsh-desktop] Spawned dsh backend process (PID: {})", child.id());
             Some(child)
@@ -105,6 +107,17 @@ match cmd.spawn() {
     }
 }
 
+fn wait_for_server(port: u16, max_retries: u32) -> bool {
+    let addr = format!("127.0.0.1:{}", port);
+    for _ in 0..max_retries {
+        if TcpStream::connect(&addr).is_ok() {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    false
+}
+
 #[tauri::command]
 fn get_proxy_config(state: State<'_, AppState>) -> ProxyConfig {
     let proxy = state.proxy.lock().unwrap();
@@ -114,14 +127,12 @@ fn get_proxy_config(state: State<'_, AppState>) -> ProxyConfig {
 #[tauri::command]
 fn save_and_restart(state: State<'_, AppState>, config: ProxyConfig) -> Result<String, String> {
     save_proxy_config(&config)?;
-
-    // Update state
+    
     {
         let mut p = state.proxy.lock().unwrap();
         *p = config.clone();
     }
 
-    // Kill old process if running
     {
         let mut child_guard = state.child.lock().unwrap();
         if let Some(mut child) = child_guard.take() {
@@ -130,7 +141,6 @@ fn save_and_restart(state: State<'_, AppState>, config: ProxyConfig) -> Result<S
             println!("[dsh-desktop] Killed previous dsh backend process");
         }
 
-        // Restart with new proxy config
         let port = *state.port.lock().unwrap();
         let new_child = start_dsh_process(&state.project_dir, &config, port);
         *child_guard = new_child;
@@ -157,17 +167,15 @@ fn get_backend_status(state: State<'_, AppState>) -> serde_json::Value {
 fn main() {
     let initial_proxy = load_proxy_config();
     let current_dir = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-
-    // Resolve deepseek-harness root directory
+    
     let mut project_dir = current_dir.clone();
     if project_dir.ends_with("apps/desktop-tauri") {
         project_dir.pop();
         project_dir.pop();
     }
-
+    
     let default_port = 51730;
-
-    // Start backend process
+    
     let initial_child = start_dsh_process(&project_dir, &initial_proxy, default_port);
 
     let state = AppState {
@@ -184,6 +192,29 @@ fn main() {
             save_and_restart,
             get_backend_status
         ])
+        .setup(move |app| {
+            let port = default_port;
+            let app_handle = app.handle().clone();
+            
+            std::thread::spawn(move || {
+                println!("[dsh-desktop] Waiting for backend server on port {}...", port);
+                let ready = wait_for_server(port, 100);
+                if ready {
+                    println!("[dsh-desktop] Backend is ready. Navigating window...");
+                } else {
+                    eprintln!("[dsh-desktop] Backend server timed out; opening window anyway.");
+                }
+
+                let target_url = format!("http://127.0.0.1:{}", port);
+                if let Some(window) = app_handle.get_webview_window("main") {
+                    if let Ok(url) = Url::parse(&target_url) {
+                        let _ = window.navigate(url);
+                    }
+                }
+            });
+            
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
