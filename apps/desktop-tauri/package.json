@@ -5,5 +5,8 @@
   "scripts": {
     "tauri": "tauri",
     "build": "cargo build --release"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4"
   }
 }
