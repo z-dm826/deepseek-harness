@@ -1,9 +1,9 @@
 {
-  name: @deepseek-ai/dsh-desktop,
-  version: 0.1.2-alpha.2,
-  private: true,
-  scripts: {
-    tauri: tauri,
-    build: cargo build --release
+  "name": "@deepseek-ai/dsh-desktop",
+  "version": "0.1.2-alpha.2",
+  "private": true,
+  "scripts": {
+    "tauri": "tauri",
+    "build": "cargo build --release"
   }
 }

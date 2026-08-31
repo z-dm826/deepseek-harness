@@ -464,6 +464,8 @@ importers:
         specifier: 8.21.0
         version: 8.21.0
 
+  apps/desktop-tauri: {}
+
   apps/web:
     devDependencies:
       '@deepseek-ai/cordis-plugin-group':
