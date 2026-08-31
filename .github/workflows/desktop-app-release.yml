@@ -8,12 +8,6 @@ on:
       - 'v*'
       - 'desktop-v*'
   workflow_dispatch:
-    inputs:
-      release_tag:
-        description: 'Tag name for release (e.g. v0.1.0)'
-        required: false
-        default: 'v0.1.0'
-        type: string
 
 permissions:
   contents: write
@@ -32,7 +26,7 @@ jobs:
             target: 'x86_64-apple-darwin'
           - platform: 'windows-latest'
             target: 'x86_64-pc-windows-msvc'
-          - platform: 'ubuntu-22.04'
+          - platform: 'ubuntu-24.04'
             target: 'x86_64-unknown-linux-gnu'
 
     runs-on: ${{ matrix.platform }}
@@ -40,11 +34,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: '22'
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -57,7 +53,7 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Install Linux dependencies
-        if: matrix.platform == 'ubuntu-22.04'
+        if: matrix.platform == 'ubuntu-24.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf build-essential pkg-config libssl-dev
@@ -74,8 +70,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: './apps/desktop-tauri'
-          tagName: ${{ inputs.release_tag || (github.ref_type == 'tag' && github.ref_name || 'v0.1.0') }}
-          releaseName: 'DeepSeek Harness Desktop ${{ inputs.release_tag || (github.ref_type == 'tag' && github.ref_name || 'v0.1.0') }}'
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || 'v0.1.0' }}
+          releaseName: 'DeepSeek Harness Desktop ${{ github.ref_type == 'tag' && github.ref_name || 'v0.1.0' }}'
           releaseBody: 'DeepSeek Harness Desktop Client with proxy management for macOS (Apple Silicon & Intel), Windows, and Linux.'
           releaseDraft: false
           prerelease: false
