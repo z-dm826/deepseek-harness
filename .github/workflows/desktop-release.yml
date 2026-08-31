@@ -1,0 +1,81 @@
+name: Desktop App CI/CD (Release)
+
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - 'v*'
+      - 'desktop-v*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Tag name for release (e.g. v0.1.0)'
+        required: false
+        default: 'v0.1.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'macos-latest'
+            target: 'aarch64-apple-darwin'
+          - platform: 'macos-13'
+            target: 'x86_64-apple-darwin'
+          - platform: 'windows-latest'
+            target: 'x86_64-pc-windows-msvc'
+          - platform: 'ubuntu-22.04'
+            target: 'x86_64-unknown-linux-gnu'
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf build-essential pkg-config libssl-dev
+
+      - name: Install Node dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Web Frontend & Monorepo Libs
+        run: pnpm run build
+
+      - name: Build and Release Desktop App
+        uses: tauri-apps/tauri-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: './apps/desktop-tauri'
+          tagName: ${{ inputs.release_tag || (github.ref_type == 'tag' && github.ref_name || 'v0.1.0') }}
+          releaseName: 'DeepSeek Harness Desktop ${{ inputs.release_tag || (github.ref_type == 'tag' && github.ref_name || 'v0.1.0') }}'
+          releaseBody: 'DeepSeek Harness Desktop Client with proxy management for macOS (Apple Silicon & Intel), Windows, and Linux.'
+          releaseDraft: false
+          prerelease: false
+          args: --target ${{ matrix.target }}
